@@ -77,7 +77,23 @@ export class StubProvider {
   }
 
   getCustomerAIncidentBatch(): ProviderBatch {
-    return this.createBatch("customer-a", customerAFixtures.incidentV2, 3);
+    return this.getIncidentBatch("customer-a");
+  }
+
+  getIncidentBatch(customerId: CustomerId): ProviderBatch {
+    const records =
+      customerId === "customer-a"
+        ? customerAFixtures.incidentV2
+        : customerBFixtures.incidentV2;
+    const reportedRecordCount = customerId === "customer-a" ? 3 : 2;
+
+    return this.createBatch(customerId, records, reportedRecordCount);
+  }
+
+  getActiveIncidentBatches(): readonly ProviderBatch[] {
+    return (["customer-a", "customer-b"] as const).map((customerId) =>
+      this.getIncidentBatch(customerId),
+    );
   }
 
   private createBatch(

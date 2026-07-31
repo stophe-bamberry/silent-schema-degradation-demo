@@ -12,6 +12,21 @@ export class InMemoryRecordRepository {
       .length;
   }
 
+  countByScope(
+    provider: MeetingRecord["provider"],
+    customerId: string,
+    transactionIds: readonly string[],
+  ): number {
+    const transactionIdSet = new Set(transactionIds);
+
+    return this.list().filter(
+      (record) =>
+        record.provider === provider &&
+        record.customerId === customerId &&
+        transactionIdSet.has(record.transactionId),
+    ).length;
+  }
+
   count(): number {
     return this.recordsByKey.size;
   }
