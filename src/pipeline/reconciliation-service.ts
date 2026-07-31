@@ -59,6 +59,12 @@ export class ReconciliationService {
     const rejectedCount = outcomes.filter(
       (outcome) => outcome.status === "rejected",
     ).length;
+    const alreadyExistingCount = outcomes.filter(
+      (outcome) => outcome.status === "already-exists",
+    ).length;
+    const conflictCount = outcomes.filter(
+      (outcome) => outcome.status === "conflict",
+    ).length;
     const expectedIdentityCounts = countIdentities(receivedInputs);
     const outcomeIdentityCounts = countIdentities(outcomes);
     const unaccountedCount = countExcessIdentities(
@@ -74,6 +80,8 @@ export class ReconciliationService {
       receivedCount: receivedInputs.length,
       persistedCount,
       rejectedCount,
+      alreadyExistingCount,
+      conflictCount,
       outcomeCount: outcomes.length,
       unaccountedCount,
       excessOutcomeCount,

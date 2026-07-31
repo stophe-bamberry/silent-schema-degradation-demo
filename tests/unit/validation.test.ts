@@ -73,6 +73,8 @@ describe("pipeline accountability", () => {
       receivedCount: 5,
       persistedCount: 0,
       rejectedCount: 5,
+      alreadyExistingCount: 0,
+      conflictCount: 0,
       outcomeCount: 5,
       unaccountedCount: 0,
       excessOutcomeCount: 0,

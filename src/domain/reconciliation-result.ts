@@ -15,6 +15,8 @@ export type PipelineAccountability = {
   receivedCount: number;
   persistedCount: number;
   rejectedCount: number;
+  alreadyExistingCount: number;
+  conflictCount: number;
   outcomeCount: number;
   unaccountedCount: number;
   excessOutcomeCount: number;
