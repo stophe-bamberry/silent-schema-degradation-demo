@@ -8,3 +8,15 @@ export type FulfilmentReconciliation = {
   unexpectedCount: number;
   fulfilment: FulfilmentStatus;
 };
+
+export type AccountabilityStatus = "PASS" | "UNACCOUNTED" | "EXCESS_OUTCOMES";
+
+export type PipelineAccountability = {
+  receivedCount: number;
+  persistedCount: number;
+  rejectedCount: number;
+  outcomeCount: number;
+  unaccountedCount: number;
+  excessOutcomeCount: number;
+  accountability: AccountabilityStatus;
+};
