@@ -31,15 +31,19 @@ describe("incident to recovery", () => {
     expect(incidentRepository.countByCustomer("customer-a")).toBe(0);
     expect(
       reconciliation.reconcileCustomer(
-        customerAIncidentBatch,
+        provider.getIncidentExpectation("customer-a"),
         incidentRepository,
       ),
     ).toEqual({
       customerId: "customer-a",
       providerReportedCount: 3,
       persistedCount: 0,
+      correctCount: 0,
       missingCount: 3,
       unexpectedCount: 0,
+      conflictCount: 0,
+      invalidExpectationCount: 0,
+      duplicateExpectedIdentityCount: 0,
       fulfilment: "MISSING",
     });
 
@@ -53,16 +57,24 @@ describe("incident to recovery", () => {
         customerId: "customer-a",
         providerReportedCount: 3,
         persistedCount: 0,
+        correctCount: 0,
         missingCount: 3,
         unexpectedCount: 0,
+        conflictCount: 0,
+        invalidExpectationCount: 0,
+        duplicateExpectedIdentityCount: 0,
         fulfilment: "MISSING",
       },
       {
         customerId: "customer-b",
         providerReportedCount: 2,
         persistedCount: 0,
+        correctCount: 0,
         missingCount: 2,
         unexpectedCount: 0,
+        conflictCount: 0,
+        invalidExpectationCount: 0,
+        duplicateExpectedIdentityCount: 0,
         fulfilment: "MISSING",
       },
     ]);
@@ -119,13 +131,13 @@ describe("incident to recovery", () => {
     ).toBe(true);
     expect(
       reconciliation.reconcileCustomer(
-        customerAIncidentBatch,
+        provider.getIncidentExpectation("customer-a"),
         forwardRepository,
       ).fulfilment,
     ).toBe("PASS");
     expect(
       reconciliation.reconcileCustomer(
-        customerBIncidentBatch,
+        provider.getIncidentExpectation("customer-b"),
         forwardRepository,
       ).fulfilment,
     ).toBe("PASS");
@@ -151,19 +163,34 @@ describe("incident to recovery", () => {
     const firstRecovery = recovery.recover();
     const secondRecovery = recovery.recover();
 
-    expect(firstRecovery).toEqual({
+    expect(firstRecovery).toMatchObject({
+      historicalRecordsExpected: 5,
       historicalRecordsRetrieved: 5,
       recordsCreated: 5,
-      alreadyExisting: 0,
+      alreadyCorrect: 0,
+      rejected: 0,
       conflicts: 0,
-      uniqueIncidentRecords: 5,
+      correctIncidentRecords: 5,
+      recoveryComplete: true,
     });
-    expect(secondRecovery).toEqual({
+    expect(firstRecovery.outcomes).toHaveLength(5);
+    expect(firstRecovery.accountability).toMatchObject({
+      persistedCount: 5,
+      accountability: "PASS",
+    });
+    expect(secondRecovery).toMatchObject({
+      historicalRecordsExpected: 5,
       historicalRecordsRetrieved: 5,
       recordsCreated: 0,
-      alreadyExisting: 5,
+      alreadyCorrect: 5,
+      rejected: 0,
       conflicts: 0,
-      uniqueIncidentRecords: 5,
+      correctIncidentRecords: 5,
+      recoveryComplete: true,
+    });
+    expect(secondRecovery.accountability).toMatchObject({
+      alreadyExistingCount: 5,
+      accountability: "PASS",
     });
 
     expect(
@@ -174,29 +201,74 @@ describe("incident to recovery", () => {
     expect(historicalRepository.count()).toBe(5);
     expect(
       reconciliation.reconcileCustomer(
-        customerAIncidentBatch,
+        provider.getIncidentExpectation("customer-a"),
         historicalRepository,
       ),
     ).toEqual({
       customerId: "customer-a",
       providerReportedCount: 3,
       persistedCount: 3,
+      correctCount: 3,
       missingCount: 0,
       unexpectedCount: 0,
+      conflictCount: 0,
+      invalidExpectationCount: 0,
+      duplicateExpectedIdentityCount: 0,
       fulfilment: "PASS",
     });
     expect(
       reconciliation.reconcileCustomer(
-        customerBIncidentBatch,
+        provider.getIncidentExpectation("customer-b"),
         historicalRepository,
       ),
     ).toEqual({
       customerId: "customer-b",
       providerReportedCount: 2,
       persistedCount: 2,
+      correctCount: 2,
       missingCount: 0,
       unexpectedCount: 0,
+      conflictCount: 0,
+      invalidExpectationCount: 0,
+      duplicateExpectedIdentityCount: 0,
       fulfilment: "PASS",
     });
+  });
+
+  it("recovers the silently dropped window in the same repository", () => {
+    const provider = new StubProvider();
+    const repository = new InMemoryRecordRepository();
+    const legacyIngestion = new IngestionService(repository);
+    const reconciliation = new ReconciliationService();
+
+    legacyIngestion.ingestLegacy(provider.getIncidentBatch("customer-a"));
+    legacyIngestion.ingestLegacy(provider.getIncidentBatch("customer-b"));
+
+    expect(repository.count()).toBe(0);
+    expect(
+      reconciliation
+        .reconcileActiveCustomers(provider, repository)
+        .map((result) => result.fulfilment),
+    ).toEqual(["MISSING", "MISSING"]);
+
+    const firstRecovery = new RecoveryService(provider, repository).recover();
+    const repeatedRecovery = new RecoveryService(
+      provider,
+      repository,
+    ).recover();
+
+    expect(firstRecovery).toMatchObject({
+      recordsCreated: 5,
+      correctIncidentRecords: 5,
+      recoveryComplete: true,
+    });
+    expect(firstRecovery.accountability.accountability).toBe("PASS");
+    expect(repeatedRecovery).toMatchObject({
+      recordsCreated: 0,
+      alreadyCorrect: 5,
+      correctIncidentRecords: 5,
+      recoveryComplete: true,
+    });
+    expect(repository.count()).toBe(5);
   });
 });

@@ -17,11 +17,11 @@ const accountability = reconciliation.reconcileAccountability(
   outcomes,
 );
 const customerAFulfilment = reconciliation.reconcileCustomer(
-  customerABatch,
+  provider.getIncidentExpectation("customer-a"),
   repository,
 );
 const customerBFulfilment = reconciliation.reconcileCustomer(
-  customerBBatch,
+  provider.getIncidentExpectation("customer-b"),
   repository,
 );
 const providerReported =

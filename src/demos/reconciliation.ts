@@ -14,7 +14,7 @@ ingestion.ingestLegacy(provider.getIncidentBatch("customer-b"));
 console.log("Reported incident");
 
 const customerA = reconciliation.reconcileCustomer(
-  provider.getIncidentBatch("customer-a"),
+  provider.getIncidentExpectation("customer-a"),
   repository,
 );
 

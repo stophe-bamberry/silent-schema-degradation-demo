@@ -1,11 +1,16 @@
-export type FulfilmentStatus = "PASS" | "MISSING" | "SURPLUS";
+export type FulfilmentStatus =
+  "PASS" | "MISSING" | "SURPLUS" | "CONFLICT" | "INVALID_EXPECTATION";
 
 export type FulfilmentReconciliation = {
   customerId: string;
   providerReportedCount: number;
   persistedCount: number;
+  correctCount: number;
   missingCount: number;
   unexpectedCount: number;
+  conflictCount: number;
+  invalidExpectationCount: number;
+  duplicateExpectedIdentityCount: number;
   fulfilment: FulfilmentStatus;
 };
 

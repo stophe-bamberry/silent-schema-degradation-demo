@@ -20,9 +20,24 @@ const customerBRecord: MeetingRecord = {
 describe("in-memory record repository identity", () => {
   it("generates a deterministic key from provider, customer, and transaction", () => {
     expect(recordKey(customerARecord)).toBe(
-      "example-provider:customer-a:txn-shared-005",
+      '["example-provider","customer-a","txn-shared-005"]',
     );
     expect(recordKey(customerARecord)).toBe(recordKey({ ...customerARecord }));
+  });
+
+  it("does not collide when identity components contain separators", () => {
+    const first = {
+      ...customerARecord,
+      customerId: "customer:a",
+      transactionId: "txn",
+    };
+    const second = {
+      ...customerARecord,
+      customerId: "customer",
+      transactionId: "a:txn",
+    };
+
+    expect(recordKey(first)).not.toBe(recordKey(second));
   });
 
   it("isolates customers that reuse the same transaction ID", () => {

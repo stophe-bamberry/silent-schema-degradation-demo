@@ -12,7 +12,8 @@
     "demo:reconciliation": "npm run build:demos && node dist/src/demos/reconciliation.js",
     "demo:validation": "npm run build:demos && node dist/src/demos/validation.js",
     "demo:forward-fix": "npm run build:demos && node dist/src/demos/forward-fix.js",
-    "demo:recovery": "npm run build:demos && node dist/src/demos/recovery.js"
+    "demo:recovery": "npm run build:demos && node dist/src/demos/recovery.js",
+    "demo:all": "npm run build:demos && node dist/src/demos/incident.js && node dist/src/demos/reconciliation.js && node dist/src/demos/validation.js && node dist/src/demos/forward-fix.js && node dist/src/demos/recovery.js"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
