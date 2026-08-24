@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build:demos": "tsc",
-    "demo:incident": "npm run build:demos && node dist/src/demos/incident.js"
+    "demo:incident": "npm run build:demos && node dist/src/demos/incident.js",
+    "demo:reconciliation": "npm run build:demos && node dist/src/demos/reconciliation.js"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
