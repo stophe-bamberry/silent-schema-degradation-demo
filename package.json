@@ -1,0 +1,21 @@
+{
+  "name": "silent-schema-degradation-demo",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" README.md \"*.json\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" README.md \"*.json\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build:demos": "tsc",
+    "demo:incident": "npm run build:demos && node dist/src/demos/incident.js"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}
