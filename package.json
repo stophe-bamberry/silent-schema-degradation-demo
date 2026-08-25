@@ -12,11 +12,15 @@
     "test": "vitest run",
     "build:demos": "tsc",
     "demo:incident": "npm run build:demos && node dist/src/demos/incident.js",
-    "demo:reconciliation": "npm run build:demos && node dist/src/demos/reconciliation.js"
+    "demo:reconciliation": "npm run build:demos && node dist/src/demos/reconciliation.js",
+    "demo:validation": "npm run build:demos && node dist/src/demos/validation.js"
   },
   "devDependencies": {
     "prettier": "^3.4.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
   }
 }
