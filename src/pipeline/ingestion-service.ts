@@ -1,8 +1,11 @@
+import type { MeetingRecord } from "../domain/meeting-record";
 import type {
+  PersistedOutcome,
   ProcessingInput,
   ProcessingOutcome,
 } from "../domain/processing-outcome";
 import type { ProviderBatch } from "../provider/provider-payload";
+import { transformCompatible } from "../provider/compatible-transformer";
 import { transformLegacy } from "../provider/legacy-transformer";
 import {
   identifyProcessingInput,
@@ -35,14 +38,30 @@ export class IngestionService {
         return result.outcome;
       }
 
-      this.repository.save(result.record);
-
-      return {
-        status: "persisted",
-        provider: result.record.provider,
-        customerId: result.record.customerId,
-        transactionId: result.record.transactionId,
-      };
+      return this.persist(result.record);
     });
+  }
+
+  ingestCompatible(records: readonly unknown[]): ProcessingOutcome[] {
+    return records.map((payload) => {
+      const result = transformCompatible(payload);
+
+      if (result.status === "rejected") {
+        return result.outcome;
+      }
+
+      return this.persist(result.record);
+    });
+  }
+
+  private persist(record: MeetingRecord): PersistedOutcome {
+    this.repository.save(record);
+
+    return {
+      status: "persisted",
+      provider: record.provider,
+      customerId: record.customerId,
+      transactionId: record.transactionId,
+    };
   }
 }

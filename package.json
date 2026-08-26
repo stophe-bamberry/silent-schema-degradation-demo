@@ -13,7 +13,8 @@
     "build:demos": "tsc",
     "demo:incident": "npm run build:demos && node dist/src/demos/incident.js",
     "demo:reconciliation": "npm run build:demos && node dist/src/demos/reconciliation.js",
-    "demo:validation": "npm run build:demos && node dist/src/demos/validation.js"
+    "demo:validation": "npm run build:demos && node dist/src/demos/validation.js",
+    "demo:forward-fix": "npm run build:demos && node dist/src/demos/forward-fix.js"
   },
   "devDependencies": {
     "prettier": "^3.4.2",

@@ -1,11 +1,11 @@
-# Stage 02: Explicit schema validation
+# Stage 03: Schema-compatible forward processing
 
-Boundary validation turns silent drops into explicit, attributable outcomes, while showing that accountable processing is not the same as customer fulfilment.
+A provider adapter now accepts both schema versions and maps them into one canonical record, restoring new processing without pretending the historical gap is repaired.
 
-- **Checkout:** `stage/02-explicit-schema-validation`
-- **Milestone tag:** `stage-02-explicit-schema-validation`
-- **Previous:** `stage/01-reconciliation-detection`
-- **Next:** `stage/03-schema-compatible-transformer`
+- **Checkout:** `stage/03-schema-compatible-transformer`
+- **Milestone tag:** `stage-03-schema-compatible-transformer`
+- **Previous:** `stage/02-explicit-schema-validation`
+- **Next:** `stage/04-idempotent-recovery`
 
 > **Simulation note:** This sequence and its one-week timeline illustrate one way the incident response may have played out. They are not an actual incident record or delivery estimate; real timing would depend on the people available, the production codebase, provider behavior, and integration complexity.
 
@@ -16,8 +16,8 @@ Requires Node.js 20 and npm.
 ```bash
 npm ci
 npm run format:check && npm run typecheck && npm test
-npm run demo:validation
-git switch stage/03-schema-compatible-transformer
+npm run demo:forward-fix
+git switch stage/04-idempotent-recovery
 git switch main
 ```
 
@@ -27,8 +27,8 @@ git switch main
 | ----------------- | ---------------------- | -------------------------- | ----------------------------------------------------- |
 | Earlier           | 00: Silent failure     | Legacy transformer         | Three provider records disappear without an error.    |
 | Earlier           | 01: Detection          | Independent reconciliation | Missing records become measurable.                    |
-| **This checkout** | 02: Explicit failure   | Boundary validation        | Every unsupported payload has a rejected outcome.     |
-| Later             | 03: Forward fix        | Compatible transformer     | Both provider schemas work for new processing.        |
+| Earlier           | 02: Explicit failure   | Boundary validation        | Unsupported payloads become explicit outcomes.        |
+| **This checkout** | 03: Forward fix        | Compatible transformer     | Both schemas work for new processing.                 |
 | Later             | 04: Safe recovery      | Idempotent replay          | Historical records can be retried without duplicates. |
 | Later             | 05: Correct completion | Accountable reconciliation | Recovery ends only when expected content is present.  |
 
@@ -36,39 +36,36 @@ The stage branch and matching tag identify this self-contained milestone in the 
 
 ## What changed and why
 
-Zod validation now runs at the provider boundary. Each received input produces an explicit persisted or rejected outcome, with identity and a reason retained for rejections. Unsupported version 2 incident payloads are therefore rejected explicitly instead of disappearing.
+The provider adapter validates either version 1 (`meetingTitle`) or version 2 (`title`) and maps both to the stable internal `title` field. Provider-specific schema differences remain at the boundary; ingestion, persistence, and reconciliation continue to use the canonical model.
 
-All five inputs are accounted for, but none are persisted. This distinction prevents a green processing metric from being mistaken for a successful customer outcome.
+The fix restores fulfilment for records processed after deployment. It deliberately does not claim that records lost before deployment have been recovered.
 
 ## Evidence
 
-`npm run demo:validation`:
+`npm run demo:forward-fix`:
 
 ```text
-Provider reported: 5
-Received inputs: 5
-Outcomes: 5
-Persisted: 0
-Explicitly rejected: 5
+Forward processing: FIXED
+customer-a: 3 reported, 3 persisted
+customer-b: 2 reported, 2 persisted
+Rejected: 0
 Unaccounted: 0
-Excess outcomes: 0
 Pipeline accountability: PASS
-Customer fulfilment: FAIL
-Stage 02 status: explicit accountability, not a complete repair
+Customer fulfilment: PASS
+Historical recovery: OUTSTANDING
 ```
 
-Vitest passes **4 test files / 24 tests**.
+Vitest passes **4 test files / 30 tests**.
 
 ## How it works
 
-- [`provider-schema.ts`](src/provider/provider-schema.ts) defines the accepted provider payload contract with Zod.
-- [`validated-transformer.ts`](src/provider/validated-transformer.ts) preserves input identity and returns either a canonical record or a rejected outcome with a reason.
-- [`IngestionService`](src/pipeline/ingestion-service.ts) records one terminal outcome for each received input.
-- [`ReconciliationService`](src/pipeline/reconciliation-service.ts) evaluates pipeline accountability separately from customer fulfilment.
-- [`validation.ts`](src/demos/validation.ts) displays both measures for the same five-record incident.
+- [`provider-schema.ts`](src/provider/provider-schema.ts) defines both provider payload versions.
+- [`compatible-transformer.ts`](src/provider/compatible-transformer.ts) validates each version and maps it into the canonical meeting-record shape.
+- [`IngestionService`](src/pipeline/ingestion-service.ts) consumes transformation outcomes without inspecting provider field names.
+- [`forward-fix.ts`](src/demos/forward-fix.ts) proves accountable, fulfilled processing for both active customers.
 
-Pipeline accountability asks whether every input has exactly one explainable outcome. Fulfilment asks whether the expected customer records exist.
+A canonical record is the provider-neutral internal model used by the rest of the system.
 
 ## Remaining gap
 
-The changed provider schema is now rejected visibly but still cannot be processed; Stage 03 adds a compatible transformer for both schema versions.
+Forward compatibility stops new loss but leaves the incident window incomplete; Stage 04 replays that historical scope through an idempotent persistence path.
