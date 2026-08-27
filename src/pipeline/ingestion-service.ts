@@ -1,6 +1,7 @@
 import type { MeetingRecord } from "../domain/meeting-record";
 import type {
-  PersistedOutcome,
+  ConflictOutcome,
+  AlreadyExistingOutcome,
   ProcessingInput,
   ProcessingOutcome,
 } from "../domain/processing-outcome";
@@ -54,14 +55,29 @@ export class IngestionService {
     });
   }
 
-  private persist(record: MeetingRecord): PersistedOutcome {
-    this.repository.save(record);
-
-    return {
-      status: "persisted",
+  private persist(record: MeetingRecord): ProcessingOutcome {
+    const persistence = this.repository.save(record);
+    const identity = {
       provider: record.provider,
       customerId: record.customerId,
       transactionId: record.transactionId,
     };
+
+    if (persistence.status === "created") {
+      return { ...identity, status: "persisted" };
+    }
+
+    if (persistence.status === "already-exists") {
+      return {
+        ...identity,
+        status: "already-exists",
+      } satisfies AlreadyExistingOutcome;
+    }
+
+    return {
+      ...identity,
+      status: "conflict",
+      reason: persistence.reason,
+    } satisfies ConflictOutcome;
   }
 }

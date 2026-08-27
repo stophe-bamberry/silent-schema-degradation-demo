@@ -96,6 +96,10 @@ export class StubProvider {
     );
   }
 
+  getHistoricalIncidentBatches(): readonly ProviderBatch[] {
+    return this.getActiveIncidentBatches();
+  }
+
   private createBatch(
     customerId: CustomerId,
     records: readonly (ProviderPayloadV1 | ProviderPayloadV2)[],

@@ -31,6 +31,8 @@ describe("validated ingestion", () => {
       receivedCount: 5,
       persistedCount: 0,
       rejectedCount: 5,
+      alreadyExistingCount: 0,
+      conflictCount: 0,
       outcomeCount: 5,
       unaccountedCount: 0,
       excessOutcomeCount: 0,
@@ -72,6 +74,8 @@ describe("schema-compatible ingestion", () => {
       receivedCount: 5,
       persistedCount: 5,
       rejectedCount: 0,
+      alreadyExistingCount: 0,
+      conflictCount: 0,
       outcomeCount: 5,
       unaccountedCount: 0,
       excessOutcomeCount: 0,
@@ -83,5 +87,80 @@ describe("schema-compatible ingestion", () => {
     expect(
       reconciliation.reconcileCustomer(customerBBatch, repository).fulfilment,
     ).toBe("PASS");
+  });
+});
+
+describe("persistence outcomes through ingestion", () => {
+  it("reports created, duplicate, and conflict outcomes honestly", () => {
+    const repository = new InMemoryRecordRepository();
+    const ingestion = new IngestionService(repository);
+    const reconciliation = new ReconciliationService();
+    const firstPayload = {
+      transactionId: "txn-a-004",
+      customerId: "customer-a",
+      title: "Quarterly review",
+    };
+    const duplicatePayload = { ...firstPayload };
+    const conflictingPayload = {
+      ...firstPayload,
+      title: "Changed quarterly review",
+    };
+    const payloads = [firstPayload, duplicatePayload, conflictingPayload];
+    const outcomes = ingestion.ingestCompatible(payloads);
+    const receivedInputs = ingestion.identifyInputs(payloads);
+
+    expect(outcomes.map((outcome) => outcome.status)).toEqual([
+      "persisted",
+      "already-exists",
+      "conflict",
+    ]);
+    expect(outcomes[2]).toMatchObject({
+      provider: "example-provider",
+      customerId: "customer-a",
+      transactionId: "txn-a-004",
+      reason: "Canonical content differs for the existing business identity",
+    });
+    expect(repository.list()).toEqual([
+      {
+        provider: "example-provider",
+        customerId: "customer-a",
+        transactionId: "txn-a-004",
+        title: "Quarterly review",
+      },
+    ]);
+    expect(
+      reconciliation.reconcileAccountability(receivedInputs, outcomes),
+    ).toEqual({
+      receivedCount: 3,
+      persistedCount: 1,
+      rejectedCount: 0,
+      alreadyExistingCount: 1,
+      conflictCount: 1,
+      outcomeCount: 3,
+      unaccountedCount: 0,
+      excessOutcomeCount: 0,
+      accountability: "PASS",
+    });
+  });
+
+  it("does not report fulfilment as complete when the scoped records are absent", () => {
+    const provider = new StubProvider();
+    const repository = new InMemoryRecordRepository();
+    const ingestion = new IngestionService(repository);
+    const reconciliation = new ReconciliationService();
+    const batch = provider.getIncidentBatch("customer-a");
+    const unrelatedPayload = {
+      transactionId: "txn-a-outside-window",
+      customerId: "customer-a",
+      title: "Unrelated record",
+    };
+
+    ingestion.ingestCompatible([unrelatedPayload]);
+
+    expect(reconciliation.reconcileCustomer(batch, repository)).toMatchObject({
+      persistedCount: 0,
+      missingCount: 3,
+      fulfilment: "MISSING",
+    });
   });
 });
