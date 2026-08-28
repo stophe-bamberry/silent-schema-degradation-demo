@@ -7,46 +7,106 @@ import type {
   ProcessingInput,
   ProcessingOutcome,
 } from "../domain/processing-outcome";
-import type { ProviderBatch } from "../provider/provider-payload";
-import { StubProvider } from "../provider/stub-provider";
+import { processingIdentityKey } from "../domain/processing-outcome";
+import type { MeetingRecord } from "../domain/meeting-record";
+import type { ProviderExpectation } from "../provider/provider-payload";
 import { InMemoryRecordRepository } from "../persistence/in-memory-record-repository";
+
+type ActiveExpectationSource = {
+  getActiveIncidentExpectations(): readonly ProviderExpectation[];
+};
 
 export class ReconciliationService {
   reconcileCustomer(
-    batch: ProviderBatch,
+    expectation: ProviderExpectation,
     repository: InMemoryRecordRepository,
   ): FulfilmentReconciliation {
-    const persistedCount = repository.countByScope(
-      batch.provider,
-      batch.customerId,
-      batch.records.map((record) => record.transactionId),
+    let correctCount = 0;
+    let persistedCount = 0;
+    let conflictCount = 0;
+    let invalidExpectationCount = 0;
+    let duplicateExpectedIdentityCount = 0;
+    const uniqueExpectedRecords: MeetingRecord[] = [];
+    const expectedIdentityKeys = new Set<string>();
+
+    for (const expectedRecord of expectation.expectedRecords) {
+      if (
+        expectedRecord.provider !== expectation.provider ||
+        expectedRecord.customerId !== expectation.customerId
+      ) {
+        invalidExpectationCount += 1;
+        continue;
+      }
+
+      const key = processingIdentityKey(expectedRecord);
+
+      if (expectedIdentityKeys.has(key)) {
+        duplicateExpectedIdentityCount += 1;
+        continue;
+      }
+
+      expectedIdentityKeys.add(key);
+      uniqueExpectedRecords.push(expectedRecord);
+    }
+
+    for (const expectedRecord of uniqueExpectedRecords) {
+      const persistedRecord = repository.find(expectedRecord);
+
+      if (persistedRecord === undefined) {
+        continue;
+      }
+
+      persistedCount += 1;
+
+      if (repository.containsExact(expectedRecord)) {
+        correctCount += 1;
+      } else {
+        conflictCount += 1;
+      }
+    }
+
+    const missingExpectedRecords =
+      uniqueExpectedRecords.length - persistedCount;
+    const missingFromManifest = Math.max(
+      expectation.reportedRecordCount - uniqueExpectedRecords.length,
+      0,
     );
-    const countDifference = batch.reportedRecordCount - persistedCount;
-    const missingCount = Math.max(countDifference, 0);
-    const unexpectedCount = Math.max(-countDifference, 0);
+    const unexpectedCount = Math.max(
+      uniqueExpectedRecords.length - expectation.reportedRecordCount,
+      0,
+    );
+    const missingCount = missingExpectedRecords + missingFromManifest;
 
     return {
-      customerId: batch.customerId,
-      providerReportedCount: batch.reportedRecordCount,
+      customerId: expectation.customerId,
+      providerReportedCount: expectation.reportedRecordCount,
       persistedCount,
+      correctCount,
       missingCount,
       unexpectedCount,
+      conflictCount,
+      invalidExpectationCount,
+      duplicateExpectedIdentityCount,
       fulfilment:
-        countDifference === 0
-          ? "PASS"
-          : countDifference > 0
-            ? "MISSING"
-            : "SURPLUS",
+        invalidExpectationCount > 0 || duplicateExpectedIdentityCount > 0
+          ? "INVALID_EXPECTATION"
+          : conflictCount > 0
+            ? "CONFLICT"
+            : missingCount > 0
+              ? "MISSING"
+              : unexpectedCount > 0
+                ? "SURPLUS"
+                : "PASS",
     };
   }
 
   reconcileActiveCustomers(
-    provider: StubProvider,
+    provider: ActiveExpectationSource,
     repository: InMemoryRecordRepository,
   ): FulfilmentReconciliation[] {
     return provider
-      .getActiveIncidentBatches()
-      .map((batch) => this.reconcileCustomer(batch, repository));
+      .getActiveIncidentExpectations()
+      .map((expectation) => this.reconcileCustomer(expectation, repository));
   }
 
   reconcileAccountability(
@@ -101,7 +161,7 @@ function countIdentities(
   const counts = new Map<string, number>();
 
   for (const identity of identities) {
-    const key = identityKey(identity);
+    const key = processingIdentityKey(identity);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
@@ -119,8 +179,4 @@ function countExcessIdentities(
   }
 
   return excessCount;
-}
-
-function identityKey(identity: ProcessingIdentity): string {
-  return `${identity.provider}:${identity.customerId}:${identity.transactionId}`;
 }

@@ -8,3 +8,15 @@ export type MeetingRecord = {
   transactionId: string;
   title: string;
 };
+
+export function sameMeetingRecord(
+  left: MeetingRecord,
+  right: MeetingRecord,
+): boolean {
+  return (
+    left.provider === right.provider &&
+    left.customerId === right.customerId &&
+    left.transactionId === right.transactionId &&
+    left.title === right.title
+  );
+}

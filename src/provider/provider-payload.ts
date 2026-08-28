@@ -1,4 +1,4 @@
-import type { Provider } from "../domain/meeting-record";
+import type { MeetingRecord, Provider } from "../domain/meeting-record";
 
 export type ProviderPayloadV1 = {
   transactionId: string;
@@ -14,9 +14,22 @@ export type ProviderPayloadV2 = {
 
 export type ProviderPayload = ProviderPayloadV1 | ProviderPayloadV2;
 
-export type ProviderBatch = {
+export type ProviderBatch<TPayload = ProviderPayload> = {
   provider: Provider;
   customerId: string;
   reportedRecordCount: number;
-  records: readonly ProviderPayload[];
+  records: readonly TPayload[];
+};
+
+/**
+ * An independently obtained statement of what the provider says should exist
+ * for one customer in the incident scope. The demo keeps this separate from
+ * replay payload retrieval so a missing payload cannot disappear from both
+ * sides of reconciliation.
+ */
+export type ProviderExpectation = {
+  provider: Provider;
+  customerId: string;
+  reportedRecordCount: number;
+  expectedRecords: readonly MeetingRecord[];
 };

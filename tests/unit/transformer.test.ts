@@ -134,6 +134,15 @@ describe("schema-compatible provider transformer", () => {
     expect(result.outcome.reason).toMatch(/title/);
   });
 
+  it("deliberately rejects additive provider fields under the strict contract", () => {
+    const result = transformCompatible({
+      ...customerAIncidentV2[0],
+      unexpectedProviderField: "schema drift",
+    });
+
+    expect(result.status).toBe("rejected");
+  });
+
   it("does not leak provider-specific fields beyond the adapter boundary", () => {
     const payloads = [customerABaselineV1[0], customerAIncidentV2[0]];
 

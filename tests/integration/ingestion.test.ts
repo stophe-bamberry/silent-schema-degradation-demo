@@ -39,10 +39,16 @@ describe("validated ingestion", () => {
       accountability: "PASS",
     });
     expect(
-      reconciliation.reconcileCustomer(customerABatch, repository).fulfilment,
+      reconciliation.reconcileCustomer(
+        provider.getIncidentExpectation("customer-a"),
+        repository,
+      ).fulfilment,
     ).toBe("MISSING");
     expect(
-      reconciliation.reconcileCustomer(customerBBatch, repository).fulfilment,
+      reconciliation.reconcileCustomer(
+        provider.getIncidentExpectation("customer-b"),
+        repository,
+      ).fulfilment,
     ).toBe("MISSING");
   });
 });
@@ -82,11 +88,46 @@ describe("schema-compatible ingestion", () => {
       accountability: "PASS",
     });
     expect(
-      reconciliation.reconcileCustomer(customerABatch, repository).fulfilment,
+      reconciliation.reconcileCustomer(
+        provider.getIncidentExpectation("customer-a"),
+        repository,
+      ).fulfilment,
     ).toBe("PASS");
     expect(
-      reconciliation.reconcileCustomer(customerBBatch, repository).fulfilment,
+      reconciliation.reconcileCustomer(
+        provider.getIncidentExpectation("customer-b"),
+        repository,
+      ).fulfilment,
     ).toBe("PASS");
+  });
+
+  it("rejects a payload routed under the wrong customer envelope", () => {
+    const repository = new InMemoryRecordRepository();
+    const ingestion = new IngestionService(repository);
+    const outcomes = ingestion.ingestCompatibleBatch({
+      provider: "example-provider",
+      customerId: "customer-a",
+      reportedRecordCount: 1,
+      records: [
+        {
+          transactionId: "txn-cross-tenant",
+          customerId: "customer-b",
+          title: "Misrouted record",
+        },
+      ],
+    });
+
+    expect(outcomes).toEqual([
+      {
+        provider: "example-provider",
+        customerId: "customer-b",
+        transactionId: "txn-cross-tenant",
+        status: "rejected",
+        reason:
+          "Payload customer customer-b does not match batch customer customer-a",
+      },
+    ]);
+    expect(repository.count()).toBe(0);
   });
 });
 
@@ -148,7 +189,6 @@ describe("persistence outcomes through ingestion", () => {
     const repository = new InMemoryRecordRepository();
     const ingestion = new IngestionService(repository);
     const reconciliation = new ReconciliationService();
-    const batch = provider.getIncidentBatch("customer-a");
     const unrelatedPayload = {
       transactionId: "txn-a-outside-window",
       customerId: "customer-a",
@@ -157,7 +197,12 @@ describe("persistence outcomes through ingestion", () => {
 
     ingestion.ingestCompatible([unrelatedPayload]);
 
-    expect(reconciliation.reconcileCustomer(batch, repository)).toMatchObject({
+    expect(
+      reconciliation.reconcileCustomer(
+        provider.getIncidentExpectation("customer-a"),
+        repository,
+      ),
+    ).toMatchObject({
       persistedCount: 0,
       missingCount: 3,
       fulfilment: "MISSING",

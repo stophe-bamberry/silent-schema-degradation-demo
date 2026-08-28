@@ -1,6 +1,4 @@
 import { InMemoryRecordRepository } from "../persistence/in-memory-record-repository";
-import { IngestionService } from "../pipeline/ingestion-service";
-import { ReconciliationService } from "../pipeline/reconciliation-service";
 import { RecoveryService } from "../pipeline/recovery-service";
 import { StubProvider } from "../provider/stub-provider";
 
@@ -9,42 +7,37 @@ const historicalRepository = new InMemoryRecordRepository();
 const recovery = new RecoveryService(provider, historicalRepository);
 const firstRecovery = recovery.recover();
 const secondRecovery = recovery.recover();
-const reconciliation = new ReconciliationService();
-const customerAResult = reconciliation.reconcileCustomer(
-  provider.getIncidentBatch("customer-a"),
-  historicalRepository,
-);
-const customerBResult = reconciliation.reconcileCustomer(
-  provider.getIncidentBatch("customer-b"),
-  historicalRepository,
-);
-const forwardRepository = new InMemoryRecordRepository();
-const forwardIngestion = new IngestionService(forwardRepository);
-const forwardRecords = [
-  ...provider.getIncidentBatch("customer-a").records,
-  ...provider.getIncidentBatch("customer-b").records,
-];
-const forwardInputs = forwardIngestion.identifyInputs(forwardRecords);
-const forwardOutcomes = forwardIngestion.ingestCompatible(forwardRecords);
-const accountability = reconciliation.reconcileAccountability(
-  forwardInputs,
-  forwardOutcomes,
-);
 
 console.log("First recovery");
+console.log(`Expected: ${firstRecovery.historicalRecordsExpected}`);
 console.log(`Retrieved: ${firstRecovery.historicalRecordsRetrieved}`);
 console.log(`Created: ${firstRecovery.recordsCreated}`);
-console.log(`Already existing: ${firstRecovery.alreadyExisting}`);
+console.log(`Already correct: ${firstRecovery.alreadyCorrect}`);
+console.log(`Rejected: ${firstRecovery.rejected}`);
 console.log(`Conflicts: ${firstRecovery.conflicts}`);
+console.log(
+  `Pipeline accountability: ${firstRecovery.accountability.accountability}`,
+);
+console.log(`Recovery complete: ${firstRecovery.recoveryComplete}`);
+console.log(`final recovery complete ${firstRecovery.recoveryComplete}`);
 console.log("");
 console.log("Second recovery");
+console.log(`Expected: ${secondRecovery.historicalRecordsExpected}`);
 console.log(`Retrieved: ${secondRecovery.historicalRecordsRetrieved}`);
 console.log(`Created: ${secondRecovery.recordsCreated}`);
-console.log(`Already existing: ${secondRecovery.alreadyExisting}`);
+console.log(`Already correct: ${secondRecovery.alreadyCorrect}`);
+console.log(`Rejected: ${secondRecovery.rejected}`);
 console.log(`Conflicts: ${secondRecovery.conflicts}`);
+console.log(
+  `Pipeline accountability: ${secondRecovery.accountability.accountability}`,
+);
+console.log(`Recovery complete: ${secondRecovery.recoveryComplete}`);
+console.log(`final recovery complete ${secondRecovery.recoveryComplete}`);
 console.log("");
-console.log(`Final unique records: ${historicalRepository.count()}`);
-console.log(`Customer A fulfilment: ${customerAResult.fulfilment}`);
-console.log(`Customer B fulfilment: ${customerBResult.fulfilment}`);
-console.log(`Pipeline accountability: ${accountability.accountability}`);
+console.log(
+  `Correct incident records: ${secondRecovery.correctIncidentRecords}`,
+);
+for (const result of secondRecovery.customerFulfilment) {
+  console.log(`${result.customerId} fulfilment: ${result.fulfilment}`);
+}
 console.log(`Duplicate records created: ${secondRecovery.recordsCreated}`);

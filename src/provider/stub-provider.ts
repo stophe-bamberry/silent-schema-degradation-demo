@@ -1,6 +1,7 @@
 import { PROVIDER } from "../domain/meeting-record";
 import type {
   ProviderBatch,
+  ProviderExpectation,
   ProviderPayloadV1,
   ProviderPayloadV2,
 } from "./provider-payload";
@@ -66,6 +67,43 @@ export const customerBFixtures = {
   ] as const satisfies readonly ProviderPayloadV2[],
 };
 
+const incidentExpectations = {
+  "customer-a": [
+    {
+      provider: PROVIDER,
+      transactionId: "txn-a-004",
+      customerId: "customer-a",
+      title: "Quarterly review",
+    },
+    {
+      provider: PROVIDER,
+      transactionId: "txn-shared-005",
+      customerId: "customer-a",
+      title: "Shared planning session",
+    },
+    {
+      provider: PROVIDER,
+      transactionId: "txn-a-006",
+      customerId: "customer-a",
+      title: "Renewal planning",
+    },
+  ],
+  "customer-b": [
+    {
+      provider: PROVIDER,
+      transactionId: "txn-shared-005",
+      customerId: "customer-b",
+      title: "Shared planning session",
+    },
+    {
+      provider: PROVIDER,
+      transactionId: "txn-b-006",
+      customerId: "customer-b",
+      title: "Customer B review",
+    },
+  ],
+} as const;
+
 export class StubProvider {
   getBaselineBatch(customerId: CustomerId): ProviderBatch {
     const records =
@@ -98,6 +136,27 @@ export class StubProvider {
 
   getHistoricalIncidentBatches(): readonly ProviderBatch[] {
     return this.getActiveIncidentBatches();
+  }
+
+  getIncidentExpectation(customerId: CustomerId): ProviderExpectation {
+    const expectedRecords = incidentExpectations[customerId];
+
+    return {
+      provider: PROVIDER,
+      customerId,
+      reportedRecordCount: expectedRecords.length,
+      expectedRecords,
+    };
+  }
+
+  getActiveIncidentExpectations(): readonly ProviderExpectation[] {
+    return (["customer-a", "customer-b"] as const).map((customerId) =>
+      this.getIncidentExpectation(customerId),
+    );
+  }
+
+  getHistoricalIncidentExpectations(): readonly ProviderExpectation[] {
+    return this.getActiveIncidentExpectations();
   }
 
   private createBatch(

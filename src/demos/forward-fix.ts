@@ -13,11 +13,11 @@ const receivedRecords = [...customerABatch.records, ...customerBBatch.records];
 const receivedInputs = ingestion.identifyInputs(receivedRecords);
 const outcomes = ingestion.ingestCompatible(receivedRecords);
 const customerAResult = reconciliation.reconcileCustomer(
-  customerABatch,
+  provider.getIncidentExpectation("customer-a"),
   repository,
 );
 const customerBResult = reconciliation.reconcileCustomer(
-  customerBBatch,
+  provider.getIncidentExpectation("customer-b"),
   repository,
 );
 const accountability = reconciliation.reconcileAccountability(
@@ -43,4 +43,4 @@ console.log(
       : "FAIL"
   }`,
 );
-console.log("Historical recovery: OUTSTANDING");
+console.log("Historical recovery: DEFERRED TO STAGE 04");

@@ -1,11 +1,11 @@
-# Stage 04: Idempotent historical recovery
+# Stage 05: Content-correct recovery
 
-Historical replay restores the five missing records and can be repeated without creating duplicates.
+This final stage of the Silent Schema Degradation Demo makes recovery complete only when processing is accountable and every independently expected customer record exists with the correct content.
 
-- **Checkout:** `stage/04-idempotent-recovery`
-- **Milestone tag:** `stage-04-idempotent-recovery`
-- **Previous:** `stage/03-schema-compatible-transformer`
-- **Next:** `stage/05-content-correct-recovery`
+- **Checkout:** `main` or `stage/05-content-correct-recovery`
+- **Milestone tag:** `stage-05-content-correct-recovery`
+- **Previous:** `stage/04-idempotent-recovery`
+- **Next:** complete journey
 
 > **Simulation note:** This sequence and its one-week timeline illustrate one way the incident response may have played out. They are not an actual incident record or delivery estimate; real timing would depend on the people available, the production codebase, provider behavior, and integration complexity.
 
@@ -16,65 +16,81 @@ Requires Node.js 20 and npm.
 ```bash
 npm ci
 npm run format:check && npm run typecheck && npm test
-npm run demo:recovery
-git switch stage/05-content-correct-recovery
+npm run demo:all
+git switch stage/04-idempotent-recovery
 git switch main
 ```
 
 ## Journey
 
-| Position          | Stage                  | Control                    | Outcome                                               |
-| ----------------- | ---------------------- | -------------------------- | ----------------------------------------------------- |
-| Earlier           | 00: Silent failure     | Legacy transformer         | Three provider records disappear without an error.    |
-| Earlier           | 01: Detection          | Independent reconciliation | Missing records become measurable.                    |
-| Earlier           | 02: Explicit failure   | Boundary validation        | Unsupported payloads become explicit outcomes.        |
-| Earlier           | 03: Forward fix        | Compatible transformer     | Both provider schemas work for new processing.        |
-| **This checkout** | 04: Safe recovery      | Idempotent replay          | Historical records can be retried without duplicates. |
-| Later             | 05: Correct completion | Accountable reconciliation | Recovery ends only when expected content is present.  |
+| Position          | Stage                  | Control                    | Outcome                                                        |
+| ----------------- | ---------------------- | -------------------------- | -------------------------------------------------------------- |
+| Earlier           | 00: Silent failure     | Legacy transformer         | Three provider records disappear without an error.             |
+| Earlier           | 01: Detection          | Independent reconciliation | Missing records become measurable.                             |
+| Earlier           | 02: Explicit failure   | Boundary validation        | Unsupported payloads become explicit outcomes.                 |
+| Earlier           | 03: Forward fix        | Compatible transformer     | Both provider schemas work for new processing.                 |
+| Earlier           | 04: Safe recovery      | Idempotent replay          | Historical records can be retried without duplicates.          |
+| **This checkout** | 05: Correct completion | Accountable reconciliation | Recovery ends only when expected identities and content match. |
 
-The stage branch and matching tag identify this self-contained milestone in the simulated response.
+The stage branch and matching tag identify this self-contained final milestone in the simulated response.
 
 ## What changed and why
 
-Recovery retrieves the explicit incident window, transforms it through the compatible provider boundary, and uses the same identity-aware persistence operation as normal processing. Record identity is provider, customer, and transaction ID; identical retries return `already-exists`, while different content at an existing identity is a conflict rather than an overwrite.
+Idempotency proves that retry is safe, but counts and matching identities can still hide wrong content, omitted records, substituted records, or unexplained processing outcomes. Stage 05 supplies the expected canonical inventory separately from replay payload retrieval and reconciles stored records against that expectation.
 
-The first replay creates five records. The second replay retrieves the same five and creates none, making retry safe after interruption or uncertain completion.
+Recovery continues after an individual rejection or conflict so the report captures the whole incident scope. Completion requires all of these conditions:
+
+- every replay input has exactly one persisted, already-correct, rejected, or conflict outcome;
+- every expected identity was retrieved, with no unexpected replacement;
+- expectation identities are valid and unique, and each provider/customer replay batch has exactly one matching expectation with the same reported count;
+- rejected and conflict counts are zero;
+- every expected canonical record exists with matching identity and content.
+
+This separates two questions: pipeline accountability asks whether every input has an explainable outcome; customer fulfilment asks whether the customer is whole.
 
 ## Evidence
 
-`npm run demo:recovery`:
+The final section of `npm run demo:all`:
 
 ```text
 First recovery
+Expected: 5
 Retrieved: 5
 Created: 5
-Already existing: 0
+Already correct: 0
+Rejected: 0
 Conflicts: 0
+Pipeline accountability: PASS
+Recovery complete: true
 
 Second recovery
+Expected: 5
 Retrieved: 5
 Created: 0
-Already existing: 5
+Already correct: 5
+Rejected: 0
 Conflicts: 0
-
-Final unique records: 5
-Customer A fulfilment: PASS
-Customer B fulfilment: PASS
 Pipeline accountability: PASS
+Recovery complete: true
+
+Correct incident records: 5
+customer-a fulfilment: PASS
+customer-b fulfilment: PASS
 Duplicate records created: 0
 ```
 
-Vitest passes **7 test files / 41 tests**.
+Vitest passes **7 files / 55 tests**. The integration tests cover wrong-content conflicts, malformed replay input, missing and substituted identities, partial progress, and safe retry. The end-to-end tests exercise both the staged journey and one repository moving from silent loss to verified recovery.
 
 ## How it works
 
-- [`RecoveryService`](src/pipeline/recovery-service.ts) retrieves the historical batches, transforms each payload, and summarizes created, existing, and conflicting outcomes.
-- [`InMemoryRecordRepository`](src/persistence/in-memory-record-repository.ts) enforces identity-aware, idempotent persistence.
-- [`compatible-transformer.ts`](src/provider/compatible-transformer.ts) keeps replay on the same provider boundary as forward processing.
-- [`recovery.ts`](src/demos/recovery.ts) runs the same recovery twice and reconciles the resulting customer state.
+- [`RecoveryService`](src/pipeline/recovery-service.ts) compares independent expectations with replay inventory, aggregates processing outcomes, and decides whether recovery is complete.
+- [`ReconciliationService`](src/pipeline/reconciliation-service.ts) evaluates accountability and content-aware customer fulfilment separately.
+- [`IngestionService`](src/pipeline/ingestion-service.ts) returns an explicit terminal outcome for every input and never overwrites conflicting content.
+- [`StubProvider`](src/provider/stub-provider.ts) keeps expected canonical records separate from historical replay batches for this deterministic demonstration.
+- [`recovery.test.ts`](tests/integration/recovery.test.ts) and [`incident-to-recovery.test.ts`](tests/e2e/incident-to-recovery.test.ts) provide the primary behavioral evidence.
 
-Idempotency answers whether retrying the same operation is safe; it does not by itself prove that every expected record has the correct content.
+A canonical record is the provider-neutral internal model. In production, its expected inventory would need an operationally independent source rather than this deterministic stub.
 
-## Remaining gap
+## Production boundary
 
-Count-based fulfilment and duplicate-free replay can still miss wrong content or unexplained outcomes; Stage 05 makes completion accountable and content-correct.
+This repository models failure and recovery semantics, not a deployable service. Production use would additionally require durable concurrent persistence, replay coordination, pagination, rate limiting, secure raw-event retention, auditing, metrics, alerts, and deployment controls.

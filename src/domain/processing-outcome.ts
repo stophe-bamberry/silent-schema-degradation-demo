@@ -8,6 +8,14 @@ export type ProcessingIdentity = {
 
 export type ProcessingInput = ProcessingIdentity;
 
+export function processingIdentityKey(identity: ProcessingIdentity): string {
+  return JSON.stringify([
+    identity.provider,
+    identity.customerId,
+    identity.transactionId,
+  ]);
+}
+
 export type PersistedOutcome = ProcessingIdentity & {
   status: "persisted";
 };

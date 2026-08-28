@@ -8,8 +8,8 @@ import { transformLegacy } from "../../src/provider/legacy-transformer";
 import { StubProvider } from "../../src/provider/stub-provider";
 import { customerABaselineV1 } from "../fixtures/customer-a";
 
-describe("customer fulfilment reconciliation", () => {
-  it("detects Customer A missing exactly three provider-reported records", () => {
+describe("content-correct customer fulfilment reconciliation", () => {
+  it("detects Customer A missing exactly three independently expected records", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
     const ingestion = new IngestionService(repository);
@@ -19,120 +19,138 @@ describe("customer fulfilment reconciliation", () => {
 
     expect(
       reconciliation.reconcileCustomer(
-        provider.getIncidentBatch("customer-a"),
+        provider.getIncidentExpectation("customer-a"),
         repository,
       ),
     ).toEqual({
       customerId: "customer-a",
       providerReportedCount: 3,
       persistedCount: 0,
+      correctCount: 0,
       missingCount: 3,
       unexpectedCount: 0,
+      conflictCount: 0,
+      invalidExpectationCount: 0,
+      duplicateExpectedIdentityCount: 0,
       fulfilment: "MISSING",
     });
   });
 
-  it("discovers Customer B through the generic active-customer sweep", () => {
+  it("discovers Customer B through the active expectation sweep", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
     const ingestion = new IngestionService(repository);
-    const reconciliation = new ReconciliationService();
 
     for (const customerId of ["customer-a", "customer-b"] as const) {
       ingestion.ingestLegacy(provider.getIncidentBatch(customerId));
     }
 
-    const results = reconciliation.reconcileActiveCustomers(
-      provider,
-      repository,
-    );
-
-    expect(results).toEqual([
+    expect(
+      new ReconciliationService().reconcileActiveCustomers(
+        provider,
+        repository,
+      ),
+    ).toEqual([
       {
         customerId: "customer-a",
         providerReportedCount: 3,
         persistedCount: 0,
+        correctCount: 0,
         missingCount: 3,
         unexpectedCount: 0,
+        conflictCount: 0,
+        invalidExpectationCount: 0,
+        duplicateExpectedIdentityCount: 0,
         fulfilment: "MISSING",
       },
       {
         customerId: "customer-b",
         providerReportedCount: 2,
         persistedCount: 0,
+        correctCount: 0,
         missingCount: 2,
         unexpectedCount: 0,
+        conflictCount: 0,
+        invalidExpectationCount: 0,
+        duplicateExpectedIdentityCount: 0,
         fulfilment: "MISSING",
       },
     ]);
   });
 
-  it("uses explicit provider metadata even when the returned records are unchanged", () => {
+  it("keeps provider count independent from the expected identity manifest", () => {
     const provider = new StubProvider();
-    const repository = new InMemoryRecordRepository();
-    const reconciliation = new ReconciliationService();
-    const originalBatch = provider.getIncidentBatch("customer-a");
-    const alteredBatch = {
-      ...originalBatch,
+    const expectation = {
+      ...provider.getIncidentExpectation("customer-a"),
       reportedRecordCount: 4,
     };
 
-    const result = reconciliation.reconcileCustomer(alteredBatch, repository);
-
-    expect(alteredBatch.records).toBe(originalBatch.records);
-    expect(result.providerReportedCount).toBe(4);
-    expect(result.missingCount).toBe(4);
-    expect(result.unexpectedCount).toBe(0);
+    expect(
+      new ReconciliationService().reconcileCustomer(
+        expectation,
+        new InMemoryRecordRepository(),
+      ),
+    ).toMatchObject({
+      providerReportedCount: 4,
+      persistedCount: 0,
+      correctCount: 0,
+      missingCount: 4,
+      unexpectedCount: 0,
+      fulfilment: "MISSING",
+    });
   });
 
-  it("uses the repository for persisted count without changing provider metadata", () => {
+  it("counts only exact canonical content as correct", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
     const reconciliation = new ReconciliationService();
-    const batch = provider.getIncidentBatch("customer-a");
+    const expectation = provider.getIncidentExpectation("customer-a");
 
     const beforePersistence = reconciliation.reconcileCustomer(
-      batch,
+      expectation,
       repository,
     );
-    repository.save({
-      provider: PROVIDER,
-      customerId: "customer-a",
-      transactionId: batch.records[0].transactionId,
-      title: "Persisted incident record",
-    });
-
+    repository.save(expectation.expectedRecords[0]);
     const afterPersistence = reconciliation.reconcileCustomer(
-      batch,
+      expectation,
       repository,
     );
 
-    expect(beforePersistence.providerReportedCount).toBe(3);
-    expect(afterPersistence.providerReportedCount).toBe(3);
-    expect(beforePersistence.persistedCount).toBe(0);
-    expect(afterPersistence.persistedCount).toBe(1);
-    expect(afterPersistence.missingCount).toBe(2);
-    expect(afterPersistence.unexpectedCount).toBe(0);
+    expect(beforePersistence).toMatchObject({
+      persistedCount: 0,
+      correctCount: 0,
+      missingCount: 3,
+    });
+    expect(afterPersistence).toMatchObject({
+      persistedCount: 1,
+      correctCount: 1,
+      missingCount: 2,
+      conflictCount: 0,
+    });
   });
 
-  it("does not use transformation outcomes as the provider expected count", () => {
+  it("reports wrong canonical content as a conflict rather than fulfilment", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
-    const ingestion = new IngestionService(repository);
-    const reconciliation = new ReconciliationService();
-    const batch = provider.getIncidentBatch("customer-a");
+    const expectation = provider.getIncidentExpectation("customer-a");
 
-    ingestion.ingestLegacy(batch);
+    repository.save({
+      ...expectation.expectedRecords[0],
+      title: "Wrong title",
+    });
 
-    const result = reconciliation.reconcileCustomer(batch, repository);
-
-    expect(result.providerReportedCount).toBe(3);
-    expect(result.persistedCount).toBe(0);
-    expect(result.missingCount).toBe(3);
-    expect(result.unexpectedCount).toBe(0);
+    expect(
+      new ReconciliationService().reconcileCustomer(expectation, repository),
+    ).toMatchObject({
+      persistedCount: 1,
+      correctCount: 0,
+      missingCount: 2,
+      conflictCount: 1,
+      fulfilment: "CONFLICT",
+    });
   });
 
-  it("does not count pre-existing baseline records for the incident window", () => {
+  it("does not count pre-existing baseline records for the incident scope", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
     const baselineRecord = transformLegacy(customerABaselineV1[0]);
@@ -145,18 +163,18 @@ describe("customer fulfilment reconciliation", () => {
 
     expect(
       new ReconciliationService().reconcileCustomer(
-        provider.getIncidentBatch("customer-a"),
+        provider.getIncidentExpectation("customer-a"),
         repository,
       ),
     ).toMatchObject({
       persistedCount: 0,
+      correctCount: 0,
       missingCount: 3,
-      unexpectedCount: 0,
       fulfilment: "MISSING",
     });
   });
 
-  it("ignores a record outside the incident transaction scope", () => {
+  it("ignores a record outside the incident expectation", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
 
@@ -169,7 +187,7 @@ describe("customer fulfilment reconciliation", () => {
 
     expect(
       new ReconciliationService().reconcileCustomer(
-        provider.getIncidentBatch("customer-a"),
+        provider.getIncidentExpectation("customer-a"),
         repository,
       ).persistedCount,
     ).toBe(0);
@@ -183,47 +201,45 @@ describe("customer fulfilment reconciliation", () => {
       provider: PROVIDER,
       customerId: "customer-b",
       transactionId: "txn-shared-005",
-      title: "Customer B record",
+      title: "Shared planning session",
     });
 
     expect(
       new ReconciliationService().reconcileCustomer(
-        provider.getIncidentBatch("customer-a"),
+        provider.getIncidentExpectation("customer-a"),
         repository,
       ).persistedCount,
     ).toBe(0);
   });
 
-  it("reports surplus scoped persistence explicitly", () => {
+  it("reports an expectation manifest surplus explicitly", () => {
     const provider = new StubProvider();
     const repository = new InMemoryRecordRepository();
-    const batch = provider.getIncidentBatch("customer-a");
-    const extraPayload = {
-      transactionId: "txn-a-extra",
+    const expectation = provider.getIncidentExpectation("customer-a");
+    const extraRecord: MeetingRecord = {
+      provider: PROVIDER,
       customerId: "customer-a",
+      transactionId: "txn-a-extra",
       title: "Extra incident record",
     };
-    const alteredBatch = {
-      ...batch,
-      records: [...batch.records, extraPayload],
+    const alteredExpectation = {
+      ...expectation,
+      expectedRecords: [...expectation.expectedRecords, extraRecord],
     };
 
-    for (const transactionId of alteredBatch.records.map(
-      (record) => record.transactionId,
-    )) {
-      repository.save({
-        provider: PROVIDER,
-        customerId: "customer-a",
-        transactionId,
-        title: "Persisted incident record",
-      });
+    for (const record of alteredExpectation.expectedRecords) {
+      repository.save(record);
     }
 
     expect(
-      new ReconciliationService().reconcileCustomer(alteredBatch, repository),
+      new ReconciliationService().reconcileCustomer(
+        alteredExpectation,
+        repository,
+      ),
     ).toMatchObject({
       providerReportedCount: 3,
       persistedCount: 4,
+      correctCount: 4,
       missingCount: 0,
       unexpectedCount: 1,
       fulfilment: "SURPLUS",
@@ -232,31 +248,27 @@ describe("customer fulfilment reconciliation", () => {
 
   it("reconciles an unnamed customer without customer-specific branching", () => {
     const repository = new InMemoryRecordRepository();
-    const batch = {
-      provider: PROVIDER,
-      customerId: "customer-c",
-      reportedRecordCount: 1,
-      records: [
-        {
-          transactionId: "txn-c-001",
-          customerId: "customer-c",
-          title: "Customer C record",
-        },
-      ],
-    };
-
-    repository.save({
+    const record: MeetingRecord = {
       provider: PROVIDER,
       customerId: "customer-c",
       transactionId: "txn-c-001",
       title: "Customer C record",
-    } satisfies MeetingRecord);
+    };
+    const expectation = {
+      provider: PROVIDER,
+      customerId: "customer-c",
+      reportedRecordCount: 1,
+      expectedRecords: [record],
+    };
+
+    repository.save(record);
 
     expect(
-      new ReconciliationService().reconcileCustomer(batch, repository),
+      new ReconciliationService().reconcileCustomer(expectation, repository),
     ).toMatchObject({
       customerId: "customer-c",
       persistedCount: 1,
+      correctCount: 1,
       fulfilment: "PASS",
     });
   });

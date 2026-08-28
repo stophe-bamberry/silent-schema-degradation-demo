@@ -1,18 +1,19 @@
-import type { MeetingRecord } from "../domain/meeting-record";
+import {
+  sameMeetingRecord,
+  type MeetingRecord,
+} from "../domain/meeting-record";
+import {
+  processingIdentityKey,
+  type ProcessingIdentity,
+} from "../domain/processing-outcome";
 
 export type PersistenceResult =
   | { status: "created"; key: string }
   | { status: "already-exists"; key: string }
   | { status: "conflict"; key: string; reason: string };
 
-export type RecordScope = {
-  provider: MeetingRecord["provider"];
-  customerId: string;
-  transactionIds: readonly string[];
-};
-
-export function recordKey(record: MeetingRecord): string {
-  return `${record.provider}:${record.customerId}:${record.transactionId}`;
+export function recordKey(record: ProcessingIdentity): string {
+  return processingIdentityKey(record);
 }
 
 export class InMemoryRecordRepository {
@@ -27,7 +28,7 @@ export class InMemoryRecordRepository {
       return { status: "created", key };
     }
 
-    if (this.hasIdenticalContent(existing, record)) {
+    if (sameMeetingRecord(existing, record)) {
       return { status: "already-exists", key };
     }
 
@@ -43,46 +44,20 @@ export class InMemoryRecordRepository {
       .length;
   }
 
-  countByScope(
-    provider: MeetingRecord["provider"],
-    customerId: string,
-    transactionIds: readonly string[],
-  ): number {
-    const transactionIdSet = new Set(transactionIds);
-
-    return this.list().filter(
-      (record) =>
-        record.provider === provider &&
-        record.customerId === customerId &&
-        transactionIdSet.has(record.transactionId),
-    ).length;
-  }
-
-  countWithinScope(scope: RecordScope): number {
-    return this.countByScope(
-      scope.provider,
-      scope.customerId,
-      scope.transactionIds,
-    );
-  }
-
   count(): number {
     return this.recordsByKey.size;
   }
 
-  list(): MeetingRecord[] {
-    return [...this.recordsByKey.values()];
+  find(identity: ProcessingIdentity): MeetingRecord | undefined {
+    return this.recordsByKey.get(recordKey(identity));
   }
 
-  private hasIdenticalContent(
-    left: MeetingRecord,
-    right: MeetingRecord,
-  ): boolean {
-    return (
-      left.provider === right.provider &&
-      left.customerId === right.customerId &&
-      left.transactionId === right.transactionId &&
-      left.title === right.title
-    );
+  containsExact(record: MeetingRecord): boolean {
+    const existing = this.find(record);
+    return existing !== undefined && sameMeetingRecord(existing, record);
+  }
+
+  list(): MeetingRecord[] {
+    return [...this.recordsByKey.values()];
   }
 }
